@@ -1,5 +1,6 @@
 var express = require("express");
 var app = express();
+const PORT = process.env.PORT || 3000;
 
 
 var middleware = {
@@ -29,6 +30,6 @@ app.get('*', function(req, res){
   res.sendStatus(404);
 });
 
-app.listen(3000, function() {
+app.listen(PORT, function() {
 	console.log("Application started");
 });
