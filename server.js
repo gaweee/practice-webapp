@@ -1,8 +1,7 @@
 var express = require('express');
 var _ = require('underscore');
+var expressValidator = require('express-validator');
 var bodyParser = require('body-parser');
-var jsonParser = bodyParser.json();
-var urlencodedParser = bodyParser.urlencoded({ extended: false });
 
 var app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +33,8 @@ var middleware = {
 };
 
 app.use(middleware.logger);
+app.use(bodyParser.json());
+app.use(expressValidator([]));
 
 app.get('/about', middleware.requireAuth, function(req, res) {
 	res.send('About Us!');
@@ -56,9 +57,20 @@ app.get('/todos', function(req, res) {
 	return res.json(todos).send();
 });
 
-app.post('/todos', jsonParser, function(req, res) {
-	console.log("Body Content is " + req.body);
-	return res.json(req.body).send();
+app.post('/todos', function(req, res) {
+	req.sanitizeBody('title').trim();
+	req.sanitizeBody('completed').toBoolean();
+
+
+	req.checkBody('title', 'Please provide a title').notEmpty();
+	var todo = {
+		id: _.max(todos, function(item) { return item.id; }).id + 1,
+		title: req.body.title,
+		completed: req.body.completed
+	};
+
+	todos.push(todo);
+	return res.json(todo).send();
 });
 
 // Setup Asset Folders
