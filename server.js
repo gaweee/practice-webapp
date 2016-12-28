@@ -1,24 +1,11 @@
 var express = require('express');
 var _ = require('underscore');
+var db =require(__dirname + '/database.js');
 var expressValidator = require('express-validator');
 var bodyParser = require('body-parser');
 
 var app = express();
 const PORT = process.env.PORT || 3000;
-
-var todos = [
-	{
-		id: 1,
-		title: 'Meet mom for lunch',
-		completed: false
-	},
-	{
-		id: 2,
-		title: 'Cook for wife',
-		completed: true
-	}
-];
-
 
 var middleware = {
 	logger: function(req, res, next) {
@@ -31,77 +18,50 @@ app.use(middleware.logger);
 app.use(bodyParser.json());
 app.use(expressValidator([]));
 
-app.get('/todos/:id', function(req, res) {
-	if (!_.isFinite(req.params.id))
-		throw new Error("Invalid Id");
 
-	var id = parseInt(req.params.id, 10);
-	var todo = _.findWhere(todos, { id: id });
 
-	if (typeof todo !== 'undefined') {
-		return res.json(todo);
-	} else {
-		return res.sendStatus(404);
-	}
-});
-
-app.delete('/todos/:id', function(req, res) {
-	if (!_.isFinite(req.params.id))
-		throw new Error("Invalid Id");
-
-	var id = parseInt(req.params.id, 10);
-	var todo = _.findWhere(todos, { id: id });
-
-	if (typeof todo !== 'undefined') {
-		todos = _.without(todos, todo);
-		return res.json(todo);
-	} else {
-		return res.sendStatus(404);
-	}
-});
-
-app.put('/todos/:id', function(req, res) {
-	if (!_.isFinite(req.params.id))
-		throw new Error("Invalid Id");
-
-	var id = parseInt(req.params.id, 10);
-	var todo = _.findWhere(todos, { id: id });
-
-	if (typeof todo !== 'undefined') {
-		req.sanitizeBody('title').trim();
-		req.sanitizeBody('completed').toBoolean();
-
-		req.checkBody('title', 'Please provide a title').notEmpty();
-
-		req.getValidationResult().then(function(result) {
-    		if (!result.isEmpty()) {
-    			var errors = _.reduce(result.array(), function(message, error) { return message + '<br /><strong>' + error.param.toUpperCase() + '</strong> - ' + error.msg; }, '');
-				return res.status(400).send('There have been validation errors: ' + errors);
-      		} else {
-      			var body = _.pick(req.body, 'title', 'completed');
-				_.extend(todo, body);
-				return res.json(todo);
-      		}
-		});
-	} else {
-		return res.sendStatus(404);
-	}
-});
 
 app.get('/todos', function(req, res) {
-	var results = todos;
+	where = {};
 
 	if (req.query.hasOwnProperty('completed'))
-		results = _.where(results, { completed: req.sanitizeQuery('completed').toBoolean() });
+		_.extend(where, { completed: req.sanitizeQuery('completed').toBoolean() });
 
 	if (req.query.hasOwnProperty('title') && req.query.title.trim().length > 0)
-		results = _.filter(results, function(todo) {
-			if (todo.title.toLowerCase().indexOf(req.query.title.trim().toLowerCase()) >= 0)
-				return true;
-		});
+		_.extend(where, { title: { $like: '%' + req.query.title.trim().toLowerCase() + '%' }});
 
-	return res.json(results);
+	console.log(where);
+	return db.todo.findAll({ where: where }).then(todos => {
+		return res.json(todos);	
+	}, error => {
+		res.sendStatus(500).json(error);
+	});
 });
+
+
+app.get('/todos/:id', function(req, res) {
+	req.sanitizeParams('id').toInt();
+	req.checkParams('id', 'Please provide a valid id').isInt();
+
+	req.getValidationResult().then(function(result) {
+		if (!result.isEmpty()) {
+			var errors = _.reduce(result.array(), function(message, error) { return message + '<br /><strong>' + error.param.toUpperCase() + '</strong> - ' + error.msg; }, '');
+			return res.status(400).send('There have been validation errors: ' + errors);
+  		} else {
+  			db.todo
+				.findById(req.params.id)
+				.then(todo => {
+					if (todo === null) 
+						return res.sendStatus(404);
+
+					return res.json(todo);
+				}, error => {
+					res.sendStatus(500).json(error);
+				});
+  		}
+  	});
+});
+
 
 app.post('/todos', function(req, res) {
 	req.sanitizeBody('title').trim();
@@ -114,15 +74,70 @@ app.post('/todos', function(req, res) {
 			var errors = _.reduce(result.array(), function(message, error) { return message + '<br /><strong>' + error.param.toUpperCase() + '</strong> - ' + error.msg; }, '');
 			return res.status(400).send('There have been validation errors: ' + errors);
   		} else {
-  			var body = _.pick(req.body, 'title', 'completed');
-			var todo = _.extend({ id: _.max(todos, function(item) { return item.id; }).id + 1 }, body);
-			todos.push(todo);
-
-			return res.json(todo);
+			db.todo.create(_.pick(req.body, 'title', 'completed')).then(todo => {
+				return res.json(todo.toJSON());	
+			}, error => {
+				res.sendStatus(500).json(error);
+			});
   		}
 	});
-	
 });
+
+
+app.delete('/todos/:id', function(req, res) {
+	req.sanitizeParams('id').toInt();
+	req.checkParams('id', 'Please provide a valid id').isInt();
+
+	req.getValidationResult().then(function(result) {
+		if (!result.isEmpty()) {
+			var errors = _.reduce(result.array(), function(message, error) { return message + '<br /><strong>' + error.param.toUpperCase() + '</strong> - ' + error.msg; }, '');
+			return res.status(400).send('There have been validation errors: ' + errors);
+  		} else {
+  			db.todo
+			.destroy({ where: {id: req.params.id }})
+			.then(rows => {
+				res.sendStatus(rows > 0 ? 200 : 404);
+			}, error => {
+				res.sendStatus(500).json(error);
+			});
+  		}
+  	});
+});
+
+
+app.put('/todos/:id', function(req, res) {
+	req.sanitizeParams('id').toInt();
+	req.sanitizeBody('title').trim();
+	req.sanitizeBody('completed').toBoolean();
+	
+	req.checkParams('id', 'Please provide a valid id').isInt();
+	req.checkBody('title', 'Please provide a title').notEmpty();
+
+	req.getValidationResult().then(function(result) {
+		if (!result.isEmpty()) {
+			var errors = _.reduce(result.array(), function(message, error) { return message + '<br /><strong>' + error.param.toUpperCase() + '</strong> - ' + error.msg; }, '');
+			return res.status(400).send('There have been validation errors: ' + errors);
+  		} else {
+  			db.todo
+	  			.findById(req.params.id)
+	  			.then(todo => {
+	  				if (todo === null) 
+						return res.sendStatus(404);
+
+					_.extend(todo, _.pick(req.body, 'title', 'completed'));
+					todo.save().then(todo => {
+						return res.json(todo.toJSON());	
+					}, error => {
+						res.sendStatus(500).json(error);	
+					});
+	  			}, error => {
+					res.sendStatus(500).json(error);
+				});
+		}
+	});
+});
+
+
 
 // Setup Asset Folders
 app.use(express.static(__dirname + '/public'));
@@ -132,6 +147,8 @@ app.get('*', function(req, res){
 	return res.sendStatus(404);
 });
 
-app.listen(PORT, function() {
-	console.log("Application started");
+db.sequelize.sync().then(function() {
+	app.listen(PORT, function() {
+		console.log("Application started");
+	});	
 });
