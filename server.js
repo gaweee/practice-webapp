@@ -39,9 +39,9 @@ app.get('/todos/:id', function(req, res) {
 	var todo = _.findWhere(todos, { id: id });
 
 	if (typeof todo !== 'undefined') {
-		return res.json(todo).send();
+		return res.json(todo);
 	} else {
-		res.sendStatus(404);
+		return res.sendStatus(404);
 	}
 });
 
@@ -54,7 +54,7 @@ app.delete('/todos/:id', function(req, res) {
 
 	if (typeof todo !== 'undefined') {
 		todos = _.without(todos, todo);
-		return res.json(todo).send();
+		return res.json(todo);
 	} else {
 		return res.sendStatus(404);
 	}
@@ -80,7 +80,7 @@ app.put('/todos/:id', function(req, res) {
       		} else {
       			var body = _.pick(req.body, 'title', 'completed');
 				_.extend(todo, body);
-				return res.json(todo).send();
+				return res.json(todo);
       		}
 		});
 	} else {
@@ -89,7 +89,18 @@ app.put('/todos/:id', function(req, res) {
 });
 
 app.get('/todos', function(req, res) {
-	return res.json(todos).send();
+	var results = todos;
+
+	if (req.query.hasOwnProperty('completed'))
+		results = _.where(results, { completed: req.sanitizeQuery('completed').toBoolean() });
+
+	if (req.query.hasOwnProperty('title') && req.query.title.trim().length > 0)
+		results = _.filter(results, function(todo) {
+			if (todo.title.toLowerCase().indexOf(req.query.title.trim().toLowerCase()) >= 0)
+				return true;
+		});
+
+	return res.json(results);
 });
 
 app.post('/todos', function(req, res) {
@@ -107,7 +118,7 @@ app.post('/todos', function(req, res) {
 			var todo = _.extend({ id: _.max(todos, function(item) { return item.id; }).id + 1 }, body);
 			todos.push(todo);
 
-			return res.json(todo).send();
+			return res.json(todo);
   		}
 	});
 	
