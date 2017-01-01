@@ -131,6 +131,17 @@ app.get('/users', function(req, res) {
 	});
 });
 
+app.post('/users/login', function(req, res) {
+	req.checkBody('email', 'Invalid email format').notEmpty().isEmail();
+	req.checkBody('password').notEmpty();
+
+	db.user.login(req.body.email, req.body.password).then(function() {
+		return res.sendStatus(200);
+	}, function() {
+		return res.sendStatus(401);
+	});
+});
+
 
 
 // Setup Asset Folders
