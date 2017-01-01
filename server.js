@@ -135,11 +135,16 @@ app.post('/users/login', function(req, res) {
 	req.checkBody('email', 'Invalid email format').notEmpty().isEmail();
 	req.checkBody('password').notEmpty();
 
-	db.user.login(req.body.email, req.body.password).then(function() {
-		return res.sendStatus(200);
-	}, function() {
-		return res.sendStatus(401);
-	});
+	db.user.login(req.body.email, req.body.password).then(
+		user => {
+			res.header('Auth', user.generateToken('login'));
+			return res.sendStatus(200);
+		}, 
+		error => {
+			console.log(error)
+			return res.sendStatus(401);
+		}
+	);
 });
 
 
