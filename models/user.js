@@ -18,9 +18,22 @@ module.exports = function(sequelize, DataTypes) {
 		email: {
 			type: DataTypes.STRING,
 			allowNull: false,
-			unique: true,
+			// unique: true,
 			validate: {
-				isEmail: true
+				isEmail: true,
+				isUnique: function(value, next) {
+					var self = this;
+                    User.find({where: {email: value}})
+                        .then(function (user) {
+                            if (user && self.id !== user.id) {
+                                return next('Email already in use');
+                            }
+                            return next();
+                        })
+                        .catch(function (error) {
+                            return next(error);
+                        });
+				}
 			}
 		},
 		salt: {
@@ -38,10 +51,13 @@ module.exports = function(sequelize, DataTypes) {
 				len: [6,100]
 			},
 			set: function(password) {
-				var salt = bcrypt.genSaltSync(10);
+				var salt = this.get('salt');
+				if (_.isNull(salt) || _.isUndefined(salt) || _.isEmpty(salt)) {
+					salt = bcrypt.genSaltSync(10);
+					this.setDataValue('salt', salt);
+				}
 
 				this.setDataValue('password', password);
-				this.setDataValue('salt', salt);
 				this.setDataValue('password_hash', bcrypt.hashSync(password, salt));
 			}
 		}
@@ -71,6 +87,34 @@ module.exports = function(sequelize, DataTypes) {
 						}
 					);
 				});
+			},
+
+			findByToken: function(token) {
+				return new Promise(function(resolve, reject) {
+					try {
+						var decodedToken = jwt.verify(token, WEBTOKEN);
+						var decryptedBytes = cryptojs.AES.decrypt(decodedToken.token, SECRETKEY);
+						var data = JSON.parse(decryptedBytes.toString(cryptojs.enc.Utf8));
+
+						if (!_.isNumber(data.id))
+							reject('Invalid Id');
+
+						User.findById(data.id).then(
+							user => {
+								if (user === null)
+									reject();
+
+								resolve(user);
+							},
+							error => {
+								reject(error);
+							}
+						);
+					} catch (error) {
+						reject(error);
+					}
+				});
+				
 			}
 		},
 
@@ -89,7 +133,7 @@ module.exports = function(sequelize, DataTypes) {
 					return jwt.sign({
 						token: encryptedData
 					}, WEBTOKEN);
-				} catch (e) {
+				} catch (error) {
 					return undefined;
 				}
 			}

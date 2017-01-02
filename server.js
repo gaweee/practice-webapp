@@ -1,28 +1,13 @@
 var express = require('express');
 var _ = require('underscore');
-var db =require(__dirname + '/database.js');
+var db = require(__dirname + '/database.js');
+var middleware = require(__dirname + '/middleware.js');
 var expressValidator = require('express-validator');
 var bodyParser = require('body-parser');
 
 
 var app = express();
 const PORT = process.env.PORT || 3000;
-
-var middleware = {
-	logger: (req, res, next) => {
-		console.log('Request ' + new Date().toString() + ' ' + req.method + ' '  + req.originalUrl);
-		next();
-	},
-
-	requireId: (req, res, next) => {
-		var validator = db.Sequelize.Validator;
-		if (!validator.isInt('' + req.params.id, { allow_leading_zeroes: true }))
-	 		return res.status(400).send('Please provide a valid id');
-
-	 	req.params.id = validator.toInt(req.params.id);
-	 	next();
-	}
-};
 
 app.use(bodyParser.json());
 app.use(middleware.logger);
@@ -141,11 +126,39 @@ app.post('/users/login', function(req, res) {
 			return res.sendStatus(200);
 		}, 
 		error => {
-			console.log(error)
+			console.log(error);
 			return res.sendStatus(401);
 		}
 	);
 });
+
+app.put('/users', middleware.requireToken, function(req, res) {
+	req.sanitizeBody('name').trim();
+	req.sanitizeBody('email').trim();
+	req.sanitizeBody('email').normalizeEmail({ all_lowercase: true });
+	req.sanitizeBody('password').trim();
+
+	var user = req.user;
+	_.extend(user, _.pick(req.body, 'name', 'email', 'password'));
+
+	user.save().then(
+		result => {
+			return res.json(result.toJSON());	
+		}, error => {
+			return res.status(400).json(error);	
+		}
+	);
+});
+
+
+app.delete('/users', middleware.requireToken, function(req, res) {
+	var user = req.user;
+	user.destroy().then(results => {
+		return res.sendStatus(200);
+	}, error => {
+		return res.status(400).json(error);
+	});
+})
 
 
 
