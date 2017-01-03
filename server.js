@@ -158,7 +158,28 @@ app.delete('/users', middleware.requireToken, function(req, res) {
 	}, error => {
 		return res.status(400).json(error);
 	});
-})
+});
+
+app.get('/populate', function(req, res) {
+	db.user.bulkCreate([
+		{ name: 'Gary Teo', email: 'gaweee@gmail.com', password: '2353535PHD' },
+		{ name: 'Gary Teo', email: 'gary@wits.sg', password: '2353535PHD' },
+		{ name: 'Serena Ho', email: 'serenayc@gmail.com', password: 'zomgwftbbq' },
+		{ name: 'Bond, Jame', email: 'james@mi6.co.uk', password: 'Password' }
+	]);
+
+	db.todo.bulkCreate([
+		{ title: "Mop the floor", completed: false },
+		{ title: "Wash the dishes", completed: false }, 
+		{ title: "Call Mom", completed: false, },
+		{ title: "Finish my antibiotics", completed: true, },
+		{ title: "Clear 1 hour of lessons", completed: true, },
+		{ title: "Complete 1 Mission on MGSV", completed: false, },
+		{ title: "Buy Christmas Presents", completed: false, }
+	]);
+
+	return res.sendStatus(200);
+});
 
 
 
@@ -170,7 +191,7 @@ app.get('*', function(req, res){
 	return res.sendStatus(404);
 });
 
-db.sequelize.sync().then(function() {
+db.sequelize.sync({ force: true }).then(function() {
 	app.listen(PORT, function() {
 		console.log("Application started");
 	});	
