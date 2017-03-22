@@ -9,9 +9,18 @@ var bodyParser = require('body-parser');
 var app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
-app.use(middleware.logger);
-app.use(expressValidator());
+//app.use(bodyParser.json());
+//app.use(middleware.logger);
+//app.use(expressValidator());
+
+app.use(function(req, res, next){
+   var data = "";
+   req.on('data', function(chunk){ data += chunk})
+   req.on('end', function(){
+      req.rawBody = data;
+      next();
+   })
+})
 
 
 app.get('/todos', function(req, res) {
@@ -30,6 +39,10 @@ app.get('/todos', function(req, res) {
 	});
 });
 
+app.post('/test', function(req, res) {
+	console.log(req.rawBody);
+	return res.status(400).send();
+});
 
 app.get('/todos/:id', middleware.requireId, function(req, res) {
 	db.todo
